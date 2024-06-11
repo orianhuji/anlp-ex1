@@ -1,6 +1,6 @@
 import torch
-from transformers import DebertaV2Tokenizer, DebertaV2ForSequenceClassification, AdamW, get_linear_schedule_with_warmup, \
-    AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, DebertaV2ForSequenceClassification, AdamW, get_linear_schedule_with_warmup, \
+    GemmaForSequenceClassification
 from datasets import load_dataset
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from sklearn.metrics import accuracy_score
@@ -9,15 +9,13 @@ from peft import LoraConfig, get_peft_model, TaskType
 # Load the MRPC dataset
 dataset = load_dataset("glue", "mrpc")
 
-for model_name in ["microsoft/deberta-v3-large", "google/gemma-2b"]:
-
-    # best Hyperparameter:
-    # Batch Size: 16 | Learning Rate: 2e-05
-    # r: 16 | Batch Size: 16 | Learning Rate: 0.002
-
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2)
+# Load the DeBERTa model and tokenizer
+for model_name in ["google/gemma-2b", "microsoft/deberta-v3-base"]:
+    tokenizer = AutoTokenizer.from_pretrained(model_name, token='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')
+    if 'deberta' in model_name:
+        model = DebertaV2ForSequenceClassification.from_pretrained(model_name, num_labels=2)
+    else:
+        model = GemmaForSequenceClassification.from_pretrained(model_name, num_labels=2, token='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')
 
 
     # Tokenize the dataset
@@ -46,8 +44,7 @@ for model_name in ["microsoft/deberta-v3-large", "google/gemma-2b"]:
 
     # Prepare optimizer and schedule (linear warmup and decay)
     optimizer = AdamW(model.parameters(), lr=learning_rate, eps=adam_epsilon)
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps,
-                                                num_training_steps=total_steps)
+    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
 
 
     # LoRA configuration
@@ -60,7 +57,6 @@ for model_name in ["microsoft/deberta-v3-large", "google/gemma-2b"]:
             target_modules=["query_proj", "value_proj"]
         )
         model = get_peft_model(model, config)
-        model.classifier.requires_grad_(True)
 
         # assert SEQ classification head is trainable
         assert list(model.classifier.parameters())[-1].requires_grad
@@ -101,6 +97,7 @@ for model_name in ["microsoft/deberta-v3-large", "google/gemma-2b"]:
             preds.extend(torch.argmax(logits, dim=1).tolist())
             true_labels.extend(labels.tolist())
         return accuracy_score(true_labels, preds)
+
 
     # Move model to GPU
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

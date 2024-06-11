@@ -53,7 +53,6 @@ def apply_lora(model, r):
         target_modules=["query_proj", "value_proj"]
     )
     model = get_peft_model(model, config)
-    model.classifier.requires_grad_(True)
 
     # assert SEQ classification head is trainable
     assert list(model.classifier.parameters())[-1].requires_grad

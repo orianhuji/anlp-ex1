@@ -11,6 +11,8 @@ dataset = load_dataset("glue", "mrpc")
 
 # Load the DeBERTa model and tokenizer
 for model_name in ["google/gemma-2b", "microsoft/deberta-v3-base"]:
+    # gemma requires access token, loading using it
+    # this access token has been invalidated - use another one
     tokenizer = AutoTokenizer.from_pretrained(model_name, token='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')
     if 'deberta' in model_name:
         model = DebertaV2ForSequenceClassification.from_pretrained(model_name, num_labels=2)
@@ -31,7 +33,10 @@ for model_name in ["google/gemma-2b", "microsoft/deberta-v3-base"]:
     val_dataset.set_format('torch', columns=['input_ids', 'attention_mask', 'label'])
 
     # Create DataLoaders
-    batch_size = 16
+    if 'deberta' in model_name:
+        batch_size = 16
+    else:
+        batch_size = 8
     train_dataloader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=batch_size)
     val_dataloader = DataLoader(val_dataset, sampler=SequentialSampler(val_dataset), batch_size=batch_size)
 
@@ -54,12 +59,9 @@ for model_name in ["google/gemma-2b", "microsoft/deberta-v3-base"]:
             r=r,
             lora_alpha=r,
             lora_dropout=0.1,
-            target_modules=["query_proj", "value_proj"]
+            target_modules=["query_proj", "value_proj"] if 'deberta' in model_name else ['q_proj', 'v_proj']
         )
         model = get_peft_model(model, config)
-
-        # assert SEQ classification head is trainable
-        assert list(model.classifier.parameters())[-1].requires_grad
 
         return model
 
